@@ -73,15 +73,32 @@ php artisan key:generate
 
 ## 4. Database Setup
 
-```sql
-CREATE DATABASE chatbot_ai CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-```
+1. **Create the database** (via Laragon's HeidiSQL/phpMyAdmin, or the MySQL CLI):
 
-Point `.env` at it (see [Environment Configuration](#6-environment-configuration)), then:
+   ```sql
+   CREATE DATABASE chatbot_ai CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+   ```
 
-```bash
-php artisan migrate
-```
+2. **Point `.env` at it** — `DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD`, etc. (see [Environment Configuration](#6-environment-configuration)). The repo's `.env.example` already assumes `chatbot_ai` as the database name and `root`/no password, matching a default Laragon MySQL install.
+
+3. **Run the migrations** — all of them are already included in `database/migrations/`, nothing extra to generate:
+
+   ```bash
+   php artisan migrate
+   ```
+
+   | Migration | Creates |
+   |---|---|
+   | `2014_10_12_000000_create_users_table` | `users` (Laravel default, unused by the chat feature itself) |
+   | `2014_10_12_100000_create_password_resets_table` | `password_resets` (Laravel default) |
+   | `2019_08_19_000000_create_failed_jobs_table` | `failed_jobs` (Laravel default) |
+   | `2026_09_16_000001_create_chat_sessions_table` | `chat_sessions` — one row per conversation |
+   | `2026_09_16_000002_create_chat_messages_table` | `chat_messages` — one row per message, FK to `chat_sessions` |
+   | `2026_09_16_000003_create_chat_attachments_table` | `chat_attachments` — one row per uploaded PDF/TXT, FK to `chat_messages` |
+
+   Verify with `php artisan migrate:status` — all six should show `Yes` under **Ran?**. See [Database Schema](#database-schema) in the Architecture section for each table's columns.
+
+4. **(Optional) roll back / redo cleanly** during development: `php artisan migrate:fresh` drops every table and re-runs all migrations from scratch — useful if you want a clean slate, but it deletes all existing conversations.
 
 ---
 
