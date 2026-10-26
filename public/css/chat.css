@@ -956,3 +956,138 @@ html[data-theme="light"] .message-bubble pre {
         max-width: 90%;
     }
 }
+
+/* ---------- Knowledge base (RAG) ---------- */
+
+.composer-options {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.kb-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    max-width: 100%;
+    padding: 6px 10px 6px 12px;
+    font: inherit;
+    font-size: 12.5px;
+    color: var(--text-muted);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    cursor: pointer;
+    transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.kb-toggle:hover {
+    color: var(--text);
+}
+
+.kb-toggle.active {
+    color: var(--text);
+    border-color: var(--accent);
+}
+
+.kb-toggle-label {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.kb-toggle-switch {
+    position: relative;
+    flex-shrink: 0;
+    width: 26px;
+    height: 15px;
+    border-radius: 15px;
+    background: var(--border);
+    transition: background 0.15s ease;
+}
+
+.kb-toggle-switch::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    background: #ffffff;
+    transition: transform 0.15s ease;
+}
+
+.kb-toggle.active .kb-toggle-switch {
+    background: var(--accent);
+}
+
+.kb-toggle.active .kb-toggle-switch::after {
+    transform: translateX(11px);
+}
+
+.message-sources {
+    margin-top: 8px;
+    font-size: 12.5px;
+    color: var(--text-muted);
+}
+
+.message-sources summary {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    padding: 4px 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    list-style: none;
+    user-select: none;
+}
+
+.message-sources summary::-webkit-details-marker {
+    display: none;
+}
+
+.message-sources summary:hover {
+    color: var(--text);
+}
+
+.message-sources ol {
+    list-style: none;
+    margin: 8px 0 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.message-sources li {
+    padding: 8px 10px;
+    border-left: 2px solid var(--accent);
+    background: var(--surface);
+    border-radius: 0 8px 8px 0;
+}
+
+.source-head {
+    display: flex;
+    gap: 6px;
+    color: var(--text);
+    font-weight: 600;
+    margin-bottom: 3px;
+}
+
+.source-index {
+    color: var(--accent);
+}
+
+.source-snippet {
+    line-height: 1.45;
+}
+
+.source-section {
+    font-size: 11.5px;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+    font-style: italic;
+}

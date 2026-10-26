@@ -23,7 +23,8 @@
          data-new-chat-url="{{ route('chat.new') }}"
          data-chat-index-url="{{ route('chat.index') }}"
          data-active-uuid="{{ optional($activeSession)->uuid }}"
-         data-max-attachment-kb="{{ config('attachments.max_size_kb') }}">
+         data-max-attachment-kb="{{ config('attachments.max_size_kb') }}"
+         data-knowledge-base="{{ implode(', ', $knowledgeBase['documents']) }}">
 
         <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
 
@@ -94,7 +95,7 @@
             <main class="chat-area">
                 <div class="messages" id="messages">
                     @forelse ($messages as $message)
-                        <div class="message message-{{ $message->role }}">
+                        <div class="message message-{{ $message->role }}"@if ($message->role === 'assistant' && $message->sources) data-sources="{{ json_encode($message->sources) }}"@endif>
                             <div class="message-avatar" aria-hidden="true">
                                 @if ($message->role === 'user')
                                     <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
@@ -173,6 +174,16 @@
                             <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                         </button>
                     </div>
+                    @if ($knowledgeBase['available'])
+                        <div class="composer-options">
+                            <button type="button" id="kb-toggle" class="kb-toggle" aria-pressed="false"
+                                    title="When on, answers come only from the ingested documents, with page citations">
+                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+                                <span class="kb-toggle-label">Answer from {{ implode(', ', $knowledgeBase['documents']) }}</span>
+                                <span class="kb-toggle-switch" aria-hidden="true"></span>
+                            </button>
+                        </div>
+                    @endif
                     <div class="chat-input-row">
                         <input type="file" id="attachment-input" accept=".pdf,.txt,application/pdf,text/plain" hidden>
                         <button type="button" id="attach-btn" class="icon-btn attach-btn" title="Attach a PDF or text file" aria-label="Attach a file">

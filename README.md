@@ -712,3 +712,271 @@ Laragon's bundled Composer (`C:\laragon\bin\composer\composer`, v2.4.1) was
 used instead and works fine. If you hit "Could not find package" errors for
 packages that clearly exist, this is almost certainly why — point your
 terminal/IDE at a Composer 2 binary.
+
+---
+
+## 18. RAG Knowledge Base (GPO Annual Report)
+
+The chat can answer questions **grounded in ingested documents**, starting
+with the **GPO Annual Report 2018** (U.S. Government Publishing Office, fiscal year
+ending September 30, 2018; 82 pages: a 30-page narrative report plus the audited
+consolidated financial statements). This is the **baseline** pipeline: plain
+sentence-aligned chunks, no structure recovery (see §19 for the structured one).
+Answers cite their sources as `[n]`, and the UI lists the cited excerpts with
+document and page numbers. Questions the report can't answer are declined
+instead of guessed.
+
+### Quick start
+
+```bash
+php artisan migrate
+
+# Copy the report PDF (or any PDF/TXT/MD) into storage/app/rag/ first
+php artisan rag:ingest storage/app/rag/gpo_annual_report_2018.pdf --title="GPO Annual Report 2018" --strategy=flat
+php artisan rag:ask "How many passports did GPO produce in FY 2018?"
+php artisan rag:eval --document=<id>     # validate against the question set (id from rag:list)
+```
+
+In the chat UI, the **"Answer from <document titles>"** toggle above the
+input appears once a document has been ingested. It is on by default, and the
+setting is remembered per browser.
+
+### Pipeline
+
+```
+PDF ──► extract per page ──► clean ──► chunk ──► embed ──► MySQL (rag_documents, rag_chunks)
+                                                              │
+question ─► (follow-up? rewrite to standalone query) ─► hybrid retrieve (dense + BM25, RRF)
+                                                              │
+                     top-k numbered excerpts + question ─► LLM (Gemini → Groq → OpenRouter)
+                                                              │
+                                     answer with [n] citations + source list (stored on the message)
+```
+
+| Stage | Implementation | Why |
+|---|---|---|
+| **Extraction** | `PdfTextExtractor`: Poppler `pdftotext` per page (ships with Git for Windows), falling back to `smalot/pdfparser` | `pdftotext` takes 0.4 s on this report; smalot took more than 5 minutes, and pdftotext handles multi-column layout better. Per-page text is what lets chunks cite pages. |
+| **Cleaning** | `TextCleaner` | Strips running headers/footers: short, non-sentence lines at a page's top/bottom that repeat on ≥5% of pages, e.g. `U. S. Government Publishing Office \| Financial Year In Review FY 2018`. Also strips bare page numbers and dot leaders, fixes ligatures, rejoins lines wrapped mid-sentence (including the blank-line-separated lines that narrow columns produce) and repairs hyphenation. Unit notes like `(Dollars in Thousands)` are deliberately kept. |
+| **Chunking** | `TextChunker`: sentence-aligned, ~1,200 chars (~300 tokens), ~200 chars overlap, page range per chunk | Annual reports are dense with distinct figures, and smaller focused chunks retrieve them precisely. Sentences are never cut, abbreviations (`U.S.`, `P.L.`) don't split, and a paragraph that runs onto the next page is stitched back together. The 2018 report gives 159 chunks. |
+| **Embeddings** | `GeminiEmbeddingProvider`: `gemini-embedding-001`, 768 dims, `RETRIEVAL_DOCUMENT` / `RETRIEVAL_QUERY` task types, L2-normalised | Reuses the existing Gemini key. Truncated Gemini vectors aren't pre-normalised, so they're normalised here. Batched, with 429/5xx backoff that honours the API's `retryDelay`. Behind `EmbeddingProviderInterface`, so it's swappable. |
+| **Storage** | MySQL; vectors as base64 packed float32 (~4 KB each) | A few hundred chunks don't need a vector DB: brute-force cosine in PHP takes milliseconds. Each document records its embedding model/dims, and mismatched spaces are never compared. |
+| **Retrieval** | `HybridRetriever`: dense cosine + `Bm25Index`, top 20 each, weighted Reciprocal Rank Fusion (k=60), top-2 of each retriever guaranteed, top 8 returned | Dense handles paraphrase; BM25 catches exact figures, years and acronyms (`TDR`, `FECA`). The guarantee fixes a real failure seen in testing: "How many people work at GPO?" was dense rank #1 for the `employed 1,662 staff` chunk but had no keyword overlap, so plain RRF ranked it below chunks both retrievers rated moderately. |
+| **Query rewriting** | `RagService::searchQuery()` | Follow-ups ("And how many since 2005?") are condensed by the LLM into a standalone query before retrieval. First turns skip this call. Any failure falls back to the raw question. |
+| **Generation** | `RagService`: system prompt + history + numbered excerpts injected into the final user turn, via `LlmService::complete()` | Same provider fallback as normal chat. The prompt requires excerpt-only answers, `[n]` citations, exact figures with units and fiscal year, and a fixed "couldn't find" reply. Native `【1】` citation markers from gpt-oss models are normalised to `[1]`. |
+
+### Commands
+
+| Command | Purpose |
+|---|---|
+| `rag:ingest {path} [--title=] [--force] [--dry-run] [--dump=file]` | Ingest a file (idempotent by SHA-256). `--dry-run --dump=chunks.txt` previews the chunks without calling the API. |
+| `rag:list [--delete=id]` | List or remove documents. |
+| `rag:search "query" [--k=]` | Show retrieved chunks with fused, dense and BM25 ranks. No LLM call. |
+| `rag:ask "question" [--model=]` | Full answer with cited sources. |
+| `rag:eval [file] [--retrieval-only] [--only=q01,f02] [--delay=] [--output=report.json]` | Score the question set. |
+
+Re-run `rag:ingest ... --force` after changing chunking or embedding settings.
+
+### Validation
+
+`resources/rag/eval/gpo_annual_report_2018.json` contains 31 questions written
+against facts verified in the report (the official sample questions have not
+been provided yet). It covers headline facts, the historical tables, the
+financial statements and their notes, the audit, programs and history, plus a
+multi-hop question, 2 multi-turn follow-ups and 3 unanswerable questions
+(an out-of-scope year, an absent fact, off-topic). Each
+answerable case lists the PDF pages that hold the answer and the facts the
+answer must contain (with accepted alternatives, e.g. `15.2 million` or
+`15,901,600`).
+
+`rag:eval` measures:
+
+- **Retrieval:** hit@k (a retrieved chunk covers an expected page) and MRR.
+- **Answer accuracy:** every required fact is present.
+- **Citation rate:** answers cite excerpts, and an expected page specifically.
+- **Refusal accuracy:** unanswerable questions are declined.
+
+Cases where every LLM provider was rate-limited are retried, then reported as
+errors and excluded from the quality metrics.
+
+**Results (2026-10-21, GPO 2018, 31 cases):** generation went through the
+normal fallback chain: 15 answers came from Gemini and 16 from Groq
+`openai/gpt-oss-20b` when Gemini hit per-minute limits.
+
+| Metric | Result |
+|---|---|
+| Retrieval hit@8 | **100%** (28/28 answerable) |
+| Retrieval MRR | **0.905** |
+| Answer accuracy (all required facts present) | **96.4%** (27/28) |
+| Answers with citations / citing an expected page | **100% / 100%** |
+| Unanswerable questions correctly declined | **100%** (3/3) |
+| Avg context sent to the LLM | ~8,800 chars |
+| Overall | **30/31 pass** |
+
+The one failure is q18 ("largest customer"). The right page (PDF p. 81,
+note 15 "Major Customers") was retrieved at rank 1, but the PDF stores that
+table's rows out of order: customer names and billing figures come out as
+separate runs. The model paired the 2017 figure (37.9%) with "U.S.
+Congress" instead of State Department at 33.3%. This is the table-extraction
+limitation listed below, not a retrieval miss.
+
+Retrieval ablation on the same set (`rag:eval --retrieval-only` with env
+overrides `RAG_DENSE_WEIGHT` / `RAG_LEXICAL_WEIGHT` /
+`RAG_GUARANTEED_PER_RETRIEVER`):
+
+| Configuration | hit@8 | MRR |
+|---|---|---|
+| Dense only | 100% | 0.917 |
+| BM25 only | 96.4% | 0.842 |
+| Hybrid RRF, no guarantee | 100% | 0.905 |
+| **Hybrid RRF + top-2 guarantee (default)** | **100%** | **0.905** |
+
+On this set, dense retrieval alone ranks slightly better (0.917 vs 0.905),
+because the questions mostly use the report's own vocabulary and BM25 now
+and then pulls a neighbouring page above the expected one. Every hit still
+lands in the top 8, so answers are unaffected. Hybrid stays the default:
+it costs nothing here and it protects exact-figure, acronym and
+element-reference queries ("Table 2.10", "SDT"), where dense embeddings are
+weakest.
+
+Free-tier rate limits are the practical constraint. Use `--delay=6` (or
+more) for a full run, and `--only=...` to re-run individual cases.
+
+### Known limitations / next steps
+
+- **Charts and some financial tables** extract as runs of numbers detached
+  from their labels, e.g. the "GPO By the Numbers" page and the balance-sheet
+  statements on pp. 58–59. Prose summaries of the same figures exist and are
+  what retrieval finds. Table-aware extraction (or a vision model over page
+  images) would make the raw statements queryable too.
+- **Scanned PDFs** have no text layer and need OCR before ingestion.
+- **Retrieval is brute force.** It's fine for one report (milliseconds), but
+  thousands of documents would need a vector index (pgvector, Qdrant, etc.)
+  behind `HybridRetriever`'s dense step.
+- **No reranker.** A cross-encoder rerank of the top 20 is the natural next
+  quality step if the question set grows harder.
+- **The eval set is self-authored.** Swap in or extend
+  `resources/rag/eval/*.json` with the official sample questions when they're
+  available. The format is documented in the file's `notes` field.
+
+---
+
+## 19. Long, Structured Documents (World Bank Global Economic Prospects)
+
+The 200-page [World Bank *Global Economic Prospects*, June 2026](https://thedocs.worldbank.org/en/doc/2b672b3b0415d6b66c45b66579db4ef5-0050012026/original/GEP-Jun-2026.pdf)
+is ingested with a **structured (section-aware) strategy**. The flat
+strategy from §18 still exists for short documents and for comparison.
+
+```bash
+curl -L -o storage/app/rag/gep_june_2026.pdf \
+  https://thedocs.worldbank.org/en/doc/2b672b3b0415d6b66c45b66579db4ef5-0050012026/original/GEP-Jun-2026.pdf
+php artisan migrate
+php artisan rag:ingest storage/app/rag/gep_june_2026.pdf --title="Global Economic Prospects June 2026"   # structured is the default
+php artisan rag:ingest storage/app/rag/gep_june_2026.pdf --dry-run --dump=gep.txt                     # inspect the section tree + chunks
+php artisan rag:eval resources/rag/eval/gep_june_2026.json --delay=6
+```
+
+### What breaks with flat chunking on a long report
+
+| Problem in this report | Effect on flat RAG | Structured fix |
+|---|---|---|
+| Six regional sections share identical headings ("Recent developments", "Outlook"), and their text says "the region" rather than naming it | A chunk about South Asia's outlook is indistinguishable from Sub-Saharan Africa's | Every chunk carries its **section breadcrumb** (`Chapter 2: Regional Outlooks > South Asia > Outlook`), which is embedded, keyword-indexed and shown to the LLM |
+| 25 forecast tables (country × year), some switching from calendar to fiscal years mid-table | Reading-order extraction scrambles cells; numbers lose their row/column | Tables are re-extracted in `pdftotext -table` mode and **every row is serialised against the header in force**, e.g. `India \| 2026/27f: 6.6 \| … \| [Percentage-point differences from January 2026 projections] 2026/27f: 0.1`; row groups repeat the caption |
+| 53 figures whose axis ticks dump hundreds of number fragments into the text | Noise chunks that match numeric queries | Figures keep the caption, key-finding sentence, panel titles and notes; chart residue is dropped |
+| Boxes (multi-page, with their own subsections) interleaved with main text | Box and chapter text mixed in one chunk | Boxes become their own subtree (`… > Box 3.1: The costs of hidden debt > Mozambique`), with subheadings detected inside them |
+| The "Th" and "fi" ligatures are missing from some fonts ("e conflict", "ailand", "nancial") | Broken words, so "Thailand" can't be found | `GlyphRepair` restores them, with sentence-start rules so wrapped text isn't touched |
+| ~175k tokens of text | Can't send the whole report; small chunks lose context, large chunks lose precision | Small chunks (1,000 chars) for retrieval, then **neighbour expansion** within the section and passage merging under a character budget |
+
+### Pipeline
+
+```
+PDF ─► reading-order text ─┬─► glyph repair ─► strip running headers ─┐
+    ├► "-table" mode text ─┘                                         ├─► StructureParser ─► blocks
+    └► "-layout" mode (TOC pages) ─► TocParser ──────────────────────┘     (section / text / table / figure / close)
+                                                                             │
+                     StructuredChunker: section tree (rag_sections) + chunks with breadcrumbs (rag_chunks)
+                                                                             │
+query ─► rewrite follow-ups ─► hybrid retrieval (dense + BM25 over breadcrumb+text, + element-reference routing, RRF)
+                                                                             │
+             ContextBuilder: widen hits with same-section neighbours, merge adjacent, de-duplicate overlap, budget
+                                                                             │
+                    numbered passages labelled "document > section path, p. 74 (PDF 96)" ─► LLM ─► cited answer
+```
+
+**How the structure is recovered** (`app/Services/Rag/Structure/`):
+
+- **Chapters and parts:** divider pages (`CHAPTER 2 / REGIONAL OUTLOOKS`, `STATISTICAL APPENDIX`).
+- **Sections and subsections:** the printed table of contents is parsed from
+  layout-mode text (`TocParser`). Nesting comes from TOC indentation, which
+  shifts between odd and even TOC pages, so it is resolved per page against
+  known anchors (chapter titles, front matter). Each entry is then found in
+  the body **in TOC order and near its promised page**. This is what tells
+  apart the six identical "Outlook" headings. The report matches 87 of 93
+  entries. One TOC entry ("Regional developments") is printed differently in
+  the body ("Recent developments") and is skipped.
+- **Boxes, figures, tables, annexes:** found from their captions. Boxes span
+  pages while each page repeats `BOX n (continued)`.
+- **Printed page numbers:** the PDF page minus a constant offset found from
+  the page-number lines in headers/footers (22 for this report). Citations
+  show both forms, e.g. "p. 74 (PDF 96)".
+- **Statistical appendix pages** (uncaptioned full-page tables) are detected
+  by their share of numeric rows plus a year/quarter header row.
+
+**Retrieval and context management:**
+
+- **Element references.** A question naming "Box 3.1", "Table 2.2",
+  "Figure 1.4", "Annex 4.2" or "Chapter 3" adds a third ranking to the fusion:
+  that element's chunks (weight `RAG_REFERENCE_WEIGHT`, default 2.0).
+- **Document filter.** `--document=ID` on `rag:search`, `rag:ask` and
+  `rag:eval` is used to compare strategies on the same file.
+- **Neighbour expansion and budget.** `RAG_NEIGHBOR_WINDOW` (default 1) and
+  `RAG_CONTEXT_MAX_CHARS` (default 12,000, about 3k tokens) keep prompts
+  inside free-tier per-minute token limits.
+- **Embedding cache.** Embeddings are cached by text hash
+  (`rag_embedding_cache`) and written batch by batch. Re-ingesting after a
+  parser change only re-embeds the chunks whose text changed, and an
+  interrupted run resumes where it stopped.
+
+### Validation
+
+`resources/rag/eval/gep_june_2026.json` holds 26 questions written from the
+PDF, since the official sample questions have not been provided yet. They
+cover:
+
+- headline, regional and commodity figures, plus chapter findings and policy;
+- boxes, tables and the statistical appendix;
+- questions that name an element ("Table 2.2", "Box 3.1");
+- two conversational follow-ups;
+- four questions the report cannot answer.
+
+Each case also has an `expected_section`, so the eval checks that the right
+part of the report was retrieved, not just the right page.
+
+```bash
+php artisan rag:eval resources/rag/eval/gep_june_2026.json --document=5 --retrieval-only
+php artisan rag:eval resources/rag/eval/gep_june_2026.json --document=5 --delay=6 --output=storage/app/rag/eval_gep_full.json
+```
+
+**Results (2026-10-23, structured strategy: 203 sections, 793 chunks):**
+Gemini generated 22 answers and Groq 4, through the normal fallback chain.
+In the full run, f02 failed with "all providers rate-limited" (an error, not
+a wrong answer); it passed when re-run on its own with `--only=f02`.
+
+| Metric | Result |
+|---|---|
+| Retrieval hit@8 | **100%** (22/22 answerable) |
+| Expected section retrieved | **100%** |
+| Retrieval MRR | **0.82** |
+| Answer accuracy (all required facts present) | **100%** (22/22) |
+| Answers with citations / citing an expected page | **100% / 100%** |
+| Unanswerable questions correctly declined | **100%** (4/4) |
+| Avg context sent to the LLM | ~11,000 chars (of the 12,000 budget) |
+| Overall | **26/26 pass** |
+
+The MRR is lower than on the GPO set (0.82 vs 0.905), but the misses are
+near-misses. In all six cases ranked 2nd or 3rd, the chunk above the expected
+page was nearly always from the **right section** on a neighbouring page,
+e.g. South Asia Outlook p. 96 above p. 98, or Box 1.1 p. 32 above p. 30. The
+one exception is g20, where a Chapter 1 summary chunk came second. Neighbour
+expansion widens each hit with the chunks either side of it in its section,
+so the expected page still reached the LLM, and every answer was correct and
+cited.

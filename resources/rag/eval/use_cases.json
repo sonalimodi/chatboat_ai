@@ -1,0 +1,27 @@
+{
+    "document": "GPO Annual Report 2018 + iMac Product Environmental Report (October 2024)",
+    "notes": "Use-case set for the two smaller reports, run against the whole knowledge base (GEP, GPO 2018, iMac) so retrieval must also pick the right document. Facts taken from the PDFs. expected_pages are PDF page numbers (1-based). must_include: every group must match; any alternative in a group counts.",
+    "questions": [
+        {"id": "p01", "category": "gpo-fact", "question": "How many employees did GPO have as of September 30, 2018?", "expected_pages": [5, 12, 14], "must_include": [["1,737", "1737"]]},
+        {"id": "p02", "category": "gpo-table", "question": "How many passports did GPO produce in FY 2018?", "expected_pages": [6, 14, 18], "must_include": [["15,901,600", "16 million", "15.9 million"]]},
+        {"id": "p03", "category": "gpo-finance", "question": "What were GPO's total revenues in FY 2018?", "expected_pages": [6, 14, 25, 43, 59], "must_include": [["874.5", "874,466"]]},
+        {"id": "p04", "category": "gpo-finance", "question": "What was GPO's net income in FY 2018 after excluding the passport capital projects reserve and the workers' compensation adjustment?", "expected_pages": [6, 25, 26, 44], "must_include": [["20.4", "20,384"]]},
+        {"id": "p05", "category": "gpo-table", "question": "What was the Congressional Publishing appropriation in 1980, in constant dollars?", "expected_pages": [12], "must_include": [["285.4"]]},
+        {"id": "p06", "category": "gpo-fact", "question": "How many Federal depository libraries participate in the FDLP?", "expected_pages": [8, 15, 19, 39], "must_include": [["1,133", "1133"]]},
+        {"id": "p07", "category": "gpo-fact", "question": "How many Preservation Steward agreements did GPO sign in FY 2018?", "expected_pages": [20], "must_include": [["20"]]},
+        {"id": "p08", "category": "gpo-finance", "question": "Who was GPO's largest customer in FY 2018 and how much was it billed?", "expected_pages": [81], "must_include": [["State"], ["270.6", "270,596", "33.3"]]},
+        {"id": "p09", "category": "gpo-fact", "question": "Which firm audited GPO's FY 2018 financial statements, and what opinion did it give?", "expected_pages": [52, 54, 55], "must_include": [["KPMG"], ["unmodified", "clean"]]},
+        {"id": "p10", "category": "gpo-fact", "question": "How much revenue did the Agency Distribution Services program earn in FY 2018?", "expected_pages": [23], "must_include": [["13 million", "12,478", "12.5"]]},
+        {"id": "m01", "category": "imac-fact", "question": "What is the total carbon footprint of the iMac (two ports) with 256GB?", "expected_pages": [2, 10], "must_include": [["346"]]},
+        {"id": "m02", "category": "imac-table", "question": "What share of the iMac's life cycle emissions comes from product use?", "expected_pages": [10], "must_include": [["45%", "45 percent"]]},
+        {"id": "m03", "category": "imac-fact", "question": "How much less energy does the iMac use than the ENERGY STAR requirement?", "expected_pages": [7], "must_include": [["58"]]},
+        {"id": "m04", "category": "imac-fact", "question": "How much recycled content is in the iMac's fiber packaging?", "expected_pages": [6], "must_include": [["76"]]},
+        {"id": "m05", "category": "imac-table", "question": "What is the iMac's power consumption in sleep mode at 115V?", "expected_pages": [12], "must_include": [["0.57"]]},
+        {"id": "m06", "category": "imac-fact", "question": "What is the carbon footprint of the iMac (four ports) 512GB configuration?", "expected_pages": [10], "must_include": [["391"]]},
+        {"id": "m07", "category": "imac-fact", "question": "What recycled aluminum does the iMac use?", "expected_pages": [1, 2, 4], "must_include": [["100"], ["stand"]]},
+        {"id": "m08", "category": "imac-fact", "question": "How many years of use does Apple assume when calculating use-phase emissions for macOS devices?", "expected_pages": [9], "must_include": [["four", "4"]]},
+        {"id": "f01", "category": "follow-up", "turns": ["What is the total carbon footprint of the iMac (two ports) with 256GB?", "And what was the baseline it was reduced from?"], "expected_pages": [2], "must_include": [["445"]]},
+        {"id": "u01", "category": "unanswerable", "answerable": false, "question": "What is the retail price of the iMac?"},
+        {"id": "u02", "category": "unanswerable", "answerable": false, "question": "How many employees did GPO have at the end of FY 2021?"}
+    ]
+}

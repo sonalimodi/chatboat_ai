@@ -60,13 +60,27 @@ class LlmService
      */
     public function generateReply(ChatSession $chatSession, ?string $preferredProviderKey = null): array
     {
+        return $this->complete($this->buildConversationPayload($chatSession), $preferredProviderKey);
+    }
+
+    /**
+     * Run an arbitrary neutral message list through the provider fallback
+     * chain. Used directly by callers that build their own prompt (e.g.
+     * RagService, which injects retrieved excerpts).
+     *
+     * @param  array<int, array{role: string, content: string}>  $messages
+     * @param  string|null  $preferredProviderKey
+     * @return array{content: string, provider: string, provider_label: string, model: string|null}
+     *
+     * @throws \App\Exceptions\LlmServiceException
+     */
+    public function complete(array $messages, ?string $preferredProviderKey = null): array
+    {
         if (empty($this->providers)) {
             Log::error('No LLM providers are enabled/configured. Check LLM_PROVIDERS and each provider\'s *_ENABLED/*_API_KEY settings.');
 
             throw new LlmServiceException($this->unavailableMessage());
         }
-
-        $messages = $this->buildConversationPayload($chatSession);
 
         foreach ($this->orderedProviders($preferredProviderKey) as $provider) {
             $result = $provider->chat($messages);
@@ -185,9 +199,10 @@ class LlmService
      * turns instead of dropping them outright.
      *
      * @param  \App\Models\ChatSession  $chatSession
+     * @param  string|null  $systemPrompt  Overrides config('llm.system_prompt')
      * @return array<int, array{role: string, content: string}>
      */
-    protected function buildConversationPayload(ChatSession $chatSession): array
+    public function buildConversationPayload(ChatSession $chatSession, ?string $systemPrompt = null): array
     {
         $maxHistory = config('llm.max_history_messages');
 
@@ -200,7 +215,7 @@ class LlmService
             ->values();
 
         $payload = [
-            ['role' => 'system', 'content' => config('llm.system_prompt')],
+            ['role' => 'system', 'content' => $systemPrompt ?? config('llm.system_prompt')],
         ];
 
         foreach ($recentMessages as $message) {

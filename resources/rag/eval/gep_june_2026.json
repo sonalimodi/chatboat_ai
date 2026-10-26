@@ -1,0 +1,161 @@
+{
+    "document": "Global Economic Prospects June 2026",
+    "source": "https://thedocs.worldbank.org/en/doc/2b672b3b0415d6b66c45b66579db4ef5-0050012026/original/GEP-Jun-2026.pdf",
+    "notes": "Self-written development set (the official sample questions were not provided); replace or extend with them. expected_pages are PDF page numbers (1-based). expected_section (optional) must appear in a retrieved chunk's section path. must_include: every group must match; a group matches if the answer contains any one alternative (case-insensitive, thousands separators ignored). Categories target long-document failure modes: table lookups, region-specific text where passages don't name the region, boxes, chapter findings, the statistical appendix, explicit element references, follow-ups, and unanswerable questions.",
+    "questions": [
+        {
+            "id": "g01", "category": "table-lookup",
+            "question": "What is India's GDP growth forecast for fiscal year 2026/27?",
+            "expected_pages": [98], "expected_section": "South Asia",
+            "must_include": [["6.6"]]
+        },
+        {
+            "id": "g02", "category": "table-lookup",
+            "question": "What is Thailand's GDP growth forecast for 2026?",
+            "expected_pages": [26, 83, 187], "expected_section": "Thailand|Table",
+            "must_include": [["1.7"]]
+        },
+        {
+            "id": "g03", "category": "headline",
+            "question": "How fast is the global economy projected to grow in 2026, compared with 2025?",
+            "expected_pages": [19, 25, 26],
+            "must_include": [["2.5 percent", "2.5%", "2.5"], ["2.9"]]
+        },
+        {
+            "id": "g04", "category": "commodities",
+            "question": "What is the Brent crude oil price expected to average in 2026?",
+            "expected_pages": [25, 37],
+            "must_include": [["94"]]
+        },
+        {
+            "id": "g05", "category": "regional-text",
+            "question": "What is the growth outlook for South Asia in 2026?",
+            "expected_pages": [96, 98], "expected_section": "South Asia",
+            "must_include": [["6.3"]]
+        },
+        {
+            "id": "g06", "category": "regional-text",
+            "question": "How fast is Europe and Central Asia expected to grow in 2026?",
+            "expected_pages": [84, 86], "expected_section": "Europe and Central Asia",
+            "must_include": [["2.1"]]
+        },
+        {
+            "id": "g07", "category": "regional-text",
+            "question": "What is the 2026 growth forecast for Sub-Saharan Africa, and how was it revised since January?",
+            "expected_pages": [99, 101], "expected_section": "Sub-Saharan Africa",
+            "must_include": [["4 percent", "4.0"], ["0.3"]]
+        },
+        {
+            "id": "g08", "category": "regional-text",
+            "question": "What growth rate is projected for Latin America and the Caribbean in 2026?",
+            "expected_pages": [88, 90], "expected_section": "Latin America",
+            "must_include": [["2.2"]]
+        },
+        {
+            "id": "g09", "category": "regional-text",
+            "question": "How much is growth in East Asia and Pacific expected to slow in 2026?",
+            "expected_pages": [81, 83], "expected_section": "East Asia and Pacific",
+            "must_include": [["4.2"], ["5 percent", "5.0"]]
+        },
+        {
+            "id": "g10", "category": "box",
+            "question": "What growth is expected for low-income countries in 2026?",
+            "expected_pages": [76, 77, 78], "expected_section": "Box 2.1",
+            "must_include": [["5.4"]]
+        },
+        {
+            "id": "g11", "category": "element-reference",
+            "question": "According to Box 3.1, how much undisclosed borrowing was revealed in Mozambique's tuna bond episode?",
+            "expected_pages": [117], "expected_section": "Box 3.1",
+            "must_include": [["1.15 billion"], ["9 percent", "9%"]]
+        },
+        {
+            "id": "g12", "category": "chapter-finding",
+            "question": "How is the rise in EMDE government debt-to-GDP ratios since 2010 associated with sovereign spreads and domestic-currency yields?",
+            "expected_pages": [19, 20, 109, 120], "expected_section": "Chapter 3|Executive Summary",
+            "must_include": [["110"], ["30 basis points", "30"]]
+        },
+        {
+            "id": "g13", "category": "chapter-finding",
+            "question": "How does the effect of a 1 percentage point increase in debt on sovereign spreads differ when debt is about 45 percent versus 80 percent of GDP?",
+            "expected_pages": [111, 114], "expected_section": "Chapter 3",
+            "must_include": [["8 basis point"], ["26"]]
+        },
+        {
+            "id": "g14", "category": "box",
+            "question": "How has global potential growth changed since the 2000s?",
+            "expected_pages": [30], "expected_section": "Box 1.1",
+            "must_include": [["3.6"], ["2.8"], ["2.2"]]
+        },
+        {
+            "id": "g15", "category": "statistical-appendix",
+            "question": "What was South Africa's year-on-year real GDP growth in the third quarter of 2025?",
+            "expected_pages": [190], "expected_section": "Statistical Appendix",
+            "must_include": [["2.1"]]
+        },
+        {
+            "id": "g16", "category": "table-lookup",
+            "question": "What is Saudi Arabia's GDP growth forecast for 2026?",
+            "expected_pages": [26, 95, 188],
+            "must_include": [["3.1"]]
+        },
+        {
+            "id": "g17", "category": "table-lookup",
+            "question": "By how much was the Maldives' 2026 growth forecast revised compared with the January 2026 projections?",
+            "expected_pages": [98, 189], "expected_section": "South Asia",
+            "must_include": [["3.2"]]
+        },
+        {
+            "id": "g18", "category": "element-reference",
+            "question": "What does Table 2.2 show for Viet Nam's growth in 2027?",
+            "expected_pages": [83], "expected_section": "Table 2.2",
+            "must_include": [["7.1"]]
+        },
+        {
+            "id": "g19", "category": "policy",
+            "question": "By how much could the World Bank Group expand available resources by reprioritizing projects already in the pipeline?",
+            "expected_pages": [35],
+            "must_include": [["50"], ["60 billion"]]
+        },
+        {
+            "id": "g20", "category": "box",
+            "question": "How are growth forecasts for low-income countries in fragile and conflict-affected situations different from other low-income countries in 2026?",
+            "expected_pages": [77, 78], "expected_section": "Box 2.1",
+            "must_include": [["4.9"], ["6.3"]]
+        },
+        {
+            "id": "f01", "category": "follow-up",
+            "turns": [
+                "What is the growth forecast for South Asia in 2026?",
+                "And for Sub-Saharan Africa?"
+            ],
+            "expected_pages": [99, 101], "expected_section": "Sub-Saharan Africa",
+            "must_include": [["4 percent", "4.0"]]
+        },
+        {
+            "id": "f02", "category": "follow-up",
+            "turns": [
+                "What is India's GDP growth forecast for fiscal year 2026/27?",
+                "What about Bangladesh for the same fiscal year?"
+            ],
+            "expected_pages": [98], "expected_section": "South Asia",
+            "must_include": [["4.6"]]
+        },
+        {
+            "id": "u01", "category": "unanswerable", "answerable": false,
+            "question": "What is the World Bank's global growth forecast for 2031?"
+        },
+        {
+            "id": "u02", "category": "unanswerable", "answerable": false,
+            "question": "What price does the report forecast for Bitcoin in 2026?"
+        },
+        {
+            "id": "u03", "category": "unanswerable", "answerable": false,
+            "question": "What is Norway's sovereign credit rating according to the report?"
+        },
+        {
+            "id": "u04", "category": "unanswerable", "answerable": false,
+            "question": "Who won the 2026 FIFA World Cup?"
+        }
+    ]
+}

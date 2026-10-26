@@ -3,13 +3,16 @@
 namespace App\Http\Controllers;
 
 use App\Exceptions\LlmServiceException;
+use App\Exceptions\RagException;
 use App\Http\Requests\SendMessageRequest;
 use App\Models\ChatMessage;
 use App\Models\ChatSession;
 use App\Services\Attachments\AttachmentService;
 use App\Services\LLM\LlmService;
+use App\Services\Rag\RagService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
@@ -26,10 +29,16 @@ class ChatController extends Controller
      */
     protected $attachmentService;
 
-    public function __construct(LlmService $llmService, AttachmentService $attachmentService)
+    /**
+     * @var \App\Services\Rag\RagService
+     */
+    protected $ragService;
+
+    public function __construct(LlmService $llmService, AttachmentService $attachmentService, RagService $ragService)
     {
         $this->llmService = $llmService;
         $this->attachmentService = $attachmentService;
+        $this->ragService = $ragService;
     }
 
     /**
@@ -46,6 +55,7 @@ class ChatController extends Controller
             'activeSession' => null,
             'messages' => collect(),
             'models' => $this->llmService->availableModels(),
+            'knowledgeBase' => $this->knowledgeBase(),
         ]);
     }
 
@@ -65,6 +75,7 @@ class ChatController extends Controller
             'activeSession' => $chatSession,
             'messages' => $chatSession->messages,
             'models' => $this->llmService->availableModels(),
+            'knowledgeBase' => $this->knowledgeBase(),
         ]);
     }
 
@@ -123,7 +134,7 @@ class ChatController extends Controller
         $chatSession->save();
 
         try {
-            $reply = $this->llmService->generateReply($chatSession, $validated['model'] ?? null);
+            $reply = $this->generate($chatSession, $validated['model'] ?? null, $request->boolean('use_knowledge_base'));
         } catch (LlmServiceException $e) {
             return response()->json([
                 'message' => $e->getMessage(),
@@ -134,6 +145,7 @@ class ChatController extends Controller
             'chat_session_id' => $chatSession->id,
             'role' => 'assistant',
             'message' => $reply['content'],
+            'sources' => $reply['sources'] ?? null,
         ]);
 
         return response()->json([
@@ -149,6 +161,7 @@ class ChatController extends Controller
                 'role' => $assistantMessage->role,
                 'message' => $assistantMessage->message,
                 'created_at' => $assistantMessage->created_at->toIso8601String(),
+                'sources' => $assistantMessage->sources,
             ],
             'session' => [
                 'uuid' => $chatSession->uuid,
@@ -183,6 +196,7 @@ class ChatController extends Controller
 
         $validated = $request->validate([
             'model' => ['nullable', 'string', Rule::in(array_keys(config('llm.providers', [])))],
+            'use_knowledge_base' => ['nullable', 'boolean'],
         ]);
 
         $lastMessage = $chatSession->messages()->orderByDesc('created_at')->orderByDesc('id')->first();
@@ -198,7 +212,7 @@ class ChatController extends Controller
         }
 
         try {
-            $reply = $this->llmService->generateReply($chatSession, $validated['model'] ?? null);
+            $reply = $this->generate($chatSession, $validated['model'] ?? null, $request->boolean('use_knowledge_base'));
         } catch (LlmServiceException $e) {
             return response()->json([
                 'message' => $e->getMessage(),
@@ -209,6 +223,7 @@ class ChatController extends Controller
             'chat_session_id' => $chatSession->id,
             'role' => 'assistant',
             'message' => $reply['content'],
+            'sources' => $reply['sources'] ?? null,
         ]);
 
         return response()->json([
@@ -216,6 +231,7 @@ class ChatController extends Controller
                 'role' => $assistantMessage->role,
                 'message' => $assistantMessage->message,
                 'created_at' => $assistantMessage->created_at->toIso8601String(),
+                'sources' => $assistantMessage->sources,
             ],
             'session' => [
                 'uuid' => $chatSession->uuid,
@@ -248,6 +264,53 @@ class ChatController extends Controller
         $chatSession->delete();
 
         return response()->json(['deleted' => true]);
+    }
+
+    /**
+     * Produce the assistant reply: grounded in the knowledge base when the
+     * user turned that on (and something has been ingested), otherwise a
+     * normal chat completion.
+     *
+     * A knowledge-base failure (e.g. the embedding API is down) surfaces
+     * as the same generic "temporarily unavailable" error as an LLM
+     * outage, rather than silently answering ungrounded - a user who asked
+     * for answers from the report should never get unsourced ones.
+     *
+     * @param  \App\Models\ChatSession  $chatSession
+     * @param  string|null  $model
+     * @param  bool  $useKnowledgeBase
+     * @return array
+     *
+     * @throws \App\Exceptions\LlmServiceException
+     */
+    protected function generate(ChatSession $chatSession, ?string $model, bool $useKnowledgeBase): array
+    {
+        if (! $useKnowledgeBase || ! $this->ragService->isAvailable()) {
+            return $this->llmService->generateReply($chatSession, $model);
+        }
+
+        try {
+            return $this->ragService->answerForSession($chatSession, $model);
+        } catch (RagException $e) {
+            Log::error('Knowledge base retrieval failed', ['error' => $e->getMessage()]);
+
+            throw new LlmServiceException('Sorry, searching the knowledge base is temporarily unavailable. Please try again later.');
+        }
+    }
+
+    /**
+     * Non-sensitive knowledge-base status for the UI toggle.
+     *
+     * @return array{available: bool, documents: array<int, string>}
+     */
+    protected function knowledgeBase(): array
+    {
+        $documents = $this->ragService->documentTitles();
+
+        return [
+            'available' => ! empty($documents),
+            'documents' => $documents,
+        ];
     }
 
     /**

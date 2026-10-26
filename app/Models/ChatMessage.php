@@ -18,6 +18,14 @@ class ChatMessage extends Model
         'chat_session_id',
         'role',
         'message',
+        'sources',
+    ];
+
+    /**
+     * @var array
+     */
+    protected $casts = [
+        'sources' => 'array',
     ];
 
     /**
