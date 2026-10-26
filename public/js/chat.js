@@ -7,6 +7,7 @@
         copy: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>',
         check: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>',
         regenerate: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>',
+        book: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>',
         file: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>'
     };
 
@@ -46,13 +47,18 @@
     var pendingAttachmentNameEl = document.getElementById('pending-attachment-name');
     var removeAttachmentBtn = document.getElementById('remove-attachment-btn');
 
+    var kbToggleBtn = document.getElementById('kb-toggle');
+    var knowledgeBaseName = appEl.dataset.knowledgeBase || '';
+
     var THEME_KEY = 'chatbot_theme';
+    var KB_KEY = 'chatbot_use_knowledge_base';
     var MODEL_KEY = 'chatbot_selected_model';
     var MAX_ATTACHMENT_KB = parseInt(appEl.dataset.maxAttachmentKb, 10) || 5120;
 
     var availableModels = [];
     var selectedModelKey = null;
     var pendingAttachment = null;
+    var useKnowledgeBase = false;
 
     // ---------------------------------------------------------------
     // URLs
@@ -335,6 +341,101 @@
     // fallback if either library fails to load.
     // ---------------------------------------------------------------
 
+    // ---------------------------------------------------------------
+    // Knowledge base (RAG) toggle
+    // ---------------------------------------------------------------
+
+    function getStoredKbPreference() {
+        try {
+            var saved = window.localStorage.getItem(KB_KEY);
+            // Default on: if documents were ingested, that's usually why
+            // the user is here.
+            return saved === null ? true : saved === '1';
+        } catch (e) {
+            return true;
+        }
+    }
+
+    function setKnowledgeBase(enabled) {
+        useKnowledgeBase = !!(enabled && kbToggleBtn);
+        if (!kbToggleBtn) {
+            return;
+        }
+        kbToggleBtn.setAttribute('aria-pressed', useKnowledgeBase ? 'true' : 'false');
+        kbToggleBtn.classList.toggle('active', useKnowledgeBase);
+        inputEl.placeholder = useKnowledgeBase
+            ? 'Ask about ' + knowledgeBaseName + '...'
+            : 'Message AI Chatbot...';
+        try {
+            window.localStorage.setItem(KB_KEY, useKnowledgeBase ? '1' : '0');
+        } catch (e) { /* ignore */ }
+    }
+
+    if (kbToggleBtn) {
+        kbToggleBtn.addEventListener('click', function () {
+            setKnowledgeBase(!useKnowledgeBase);
+            inputEl.focus();
+        });
+    }
+
+    /**
+     * Show the excerpts an answer actually cited ([n] markers), each with
+     * its document, page(s) and a snippet. Uncited retrievals are hidden -
+     * they weren't used, so listing them would overstate the evidence.
+     */
+    function renderSources(contentEl, sources) {
+        if (!sources || !sources.length) {
+            return;
+        }
+        var cited = sources.filter(function (s) { return s.cited; });
+        if (!cited.length) {
+            return;
+        }
+
+        var details = document.createElement('details');
+        details.className = 'message-sources';
+
+        var summary = document.createElement('summary');
+        summary.innerHTML = ICONS.book + '<span></span>';
+        summary.querySelector('span').textContent = cited.length === 1 ? '1 source' : cited.length + ' sources';
+        details.appendChild(summary);
+
+        var list = document.createElement('ol');
+        cited.forEach(function (source) {
+            var item = document.createElement('li');
+
+            var head = document.createElement('div');
+            head.className = 'source-head';
+            var index = document.createElement('span');
+            index.className = 'source-index';
+            index.textContent = '[' + source.index + ']';
+            var label = document.createElement('span');
+            label.textContent = source.document + ', ' + source.pages;
+            head.appendChild(index);
+            head.appendChild(label);
+
+            item.appendChild(head);
+
+            // Structured documents: where in the report this came from.
+            if (source.section) {
+                var section = document.createElement('div');
+                section.className = 'source-section';
+                section.textContent = source.section.split(' > ').join(' › ');
+                item.appendChild(section);
+            }
+
+            var snippet = document.createElement('div');
+            snippet.className = 'source-snippet';
+            snippet.textContent = source.snippet;
+            item.appendChild(snippet);
+            list.appendChild(item);
+        });
+        details.appendChild(list);
+
+        var actions = contentEl.querySelector('.message-actions');
+        contentEl.insertBefore(details, actions || null);
+    }
+
     function configureMarkdownRenderer() {
         if (!window.marked || !window.DOMPurify) {
             return;
@@ -478,6 +579,7 @@
             actions.appendChild(regenBtn);
 
             content.appendChild(actions);
+            renderSources(content, options.sources);
         }
 
         wrapper.appendChild(avatar);
@@ -772,11 +874,12 @@
                         body.append('model', selectedModelKey);
                     }
                     body.append('attachment', attachedFile);
+                    body.append('use_knowledge_base', useKnowledgeBase ? '1' : '0');
                     // No Content-Type header here - the browser sets the
                     // multipart boundary itself; setting it manually breaks the upload.
                 } else {
                     headers['Content-Type'] = 'application/json';
-                    body = JSON.stringify({ message: text, model: selectedModelKey });
+                    body = JSON.stringify({ message: text, model: selectedModelKey, use_knowledge_base: useKnowledgeBase });
                 }
 
                 return fetch(messageEndpoint(uuid), { method: 'POST', headers: headers, body: body });
@@ -805,7 +908,7 @@
         fetch(regenerateEndpoint(currentUuid), {
             method: 'POST',
             headers: jsonHeaders(),
-            body: JSON.stringify({ model: selectedModelKey }),
+            body: JSON.stringify({ model: selectedModelKey, use_knowledge_base: useKnowledgeBase }),
         })
             .then(handleReplyResponse)
             .then(function () {
@@ -836,6 +939,7 @@
             appendMessage('assistant', data.assistant_message.message, {
                 providerLabel: providerLabel,
                 createdAt: data.assistant_message.created_at,
+                sources: data.assistant_message.sources,
             });
             updateSessionTitleInSidebar(data.session.uuid, data.session.title);
 
@@ -854,6 +958,15 @@
         var el = initialAssistantBubbles[i];
         renderAssistantBubble(el, el.textContent);
     }
+
+    var initialWithSources = messagesEl.querySelectorAll('.message-assistant[data-sources]');
+    for (var j = 0; j < initialWithSources.length; j++) {
+        try {
+            renderSources(initialWithSources[j].querySelector('.message-content'), JSON.parse(initialWithSources[j].dataset.sources));
+        } catch (e) { /* malformed - skip */ }
+    }
+
+    setKnowledgeBase(getStoredKbPreference());
     refreshRegenerateButtons();
 
     scrollToBottom();

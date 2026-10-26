@@ -30,6 +30,9 @@ class SendMessageRequest extends FormRequest
             // if omitted or not currently usable, the normal fallback
             // order (config('llm.order')) is used instead.
             'model' => ['nullable', 'string', Rule::in(array_keys(config('llm.providers', [])))],
+            // Answer from the ingested documents (RAG) instead of general
+            // chat. Ignored if nothing has been ingested.
+            'use_knowledge_base' => ['nullable', 'boolean'],
             // 'mimes' validates the actual detected file content type, not
             // just the extension/client-provided Content-Type header.
             'attachment' => [
